@@ -1,0 +1,29 @@
+---
+- hosts: all
+  gather_facts: yes
+  vars:
+    playbooks: "[ 'none_provided' ]"
+    host_env: unknown
+    node_type: unknown
+    ocp_url: unknown
+
+
+  tasks:
+  ## Set facts
+  - name: Set host_env & ocp_url from inventory hosts file
+    set_fact:
+      host_env="{{ inventory_file.split('/')[-1].split('_')[1] }}"
+      ocp_url="https://{{ openshift_master_cluster_hostname }}:8443"
+    when: host_env=='unknown'
+
+  - name: Set node type, using hostname
+    set_fact:
+      node_type="{{ansible_hostname[9]|upper}}{{ansible_hostname[10]|upper}}{{ansible_hostname[11]|upper}}"
+
+  - name: Print env
+    debug: msg="Customizing {{ node_type }} node type, in the {{ host_env }} cluster, using {{ocp_url}} with master cron node {{ mas_cron_node_num }}"
+
+  - name: Run playbook 
+    include: "{{ item }}"
+    with_items: "{{ playbooks }}"
+

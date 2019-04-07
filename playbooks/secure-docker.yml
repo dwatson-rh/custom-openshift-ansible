@@ -1,0 +1,31 @@
+---
+  - name: Set host_env & ocp_url from inventory hosts file
+    set_fact:
+      host_env="{{ inventory_file.split('/')[-1].split('_')[1] }}"
+    when: host_env=='unknown'
+
+  - name: Set docker_config_file
+    set_fact:
+      docker_config_file="etc__sysconfig__docker____{{host_env}}"
+
+  - name: Print env
+    debug: msg="Securing docker with {{ docker_config_file }}"
+
+  - name: Copy docker config file
+    copy:
+      src: "{{docker_config_file }}"
+      dest: /etc/sysconfig/docker
+      backup: yes
+      owner: root
+      group: root
+      mode: 0644
+      seuser: system_u
+      serole: object_r
+      setype: etc_t
+      selevel: s0
+
+  - name: Restart Docker
+    systemd:
+      name: docker
+      enabled: True
+      state: restarted

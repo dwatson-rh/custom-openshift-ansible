@@ -1,0 +1,324 @@
+---
+- hosts: all
+  gather_facts: yes
+  vars:
+    host_env: unknown
+    node_type: unknown
+    ocp_url: unknown
+    docker_images_app: "[ 'ose-deployer', 'ose-pod' ]"
+    docker_images_mas: "[ 'ose-deployer', 'ose-pod', 'ose-web-console' ]"
+    docker_images_inf: "[ 'ose-deployer', 'ose-pod', 'ose-haproxy-router', 'ose-docker-registry' ]"
+
+  tasks:
+  ## Set facts
+  - name: Set local yum repo server FQDN
+    set_fact:
+      local_yum_server_fqdn: "mylocal.yumrepo.fqdn"
+
+  - name: Set host_env & ocp_url from inventory hosts file
+    set_fact:
+      host_env="{{ inventory_file.split('/')[-1].split('_')[1] }}"
+      ocp_url="https://{{ openshift_master_cluster_hostname }}:8443"
+    when: host_env=='unknown'
+
+  - name: Set node type, using hostname
+    set_fact:
+      node_type="{{ansible_hostname[9]|upper}}{{ansible_hostname[10]|upper}}{{ansible_hostname[11]|upper}}"
+
+  - name: Print env
+    debug: msg="Customizing {{ node_type }} node type, in the {{ host_env }} cluster, using ocp_url '{{ocp_url}}'"
+
+  - when: node_type=='MAS'
+    block:
+    - name: Set node type, using hostname
+      set_fact:
+        mas_node_num="{{ansible_hostname[12]}}{{ansible_hostname[13]}}"
+
+  - name: Set prep_local_yum_repo to default
+    set_fact:
+      prep_local_yum_repo=false
+    when: prep_local_yum_repo is not defined
+
+  - name: Set restore_yum_repo to default
+    set_fact:
+      restore_yum_repo=false
+    when: restore_yum_repo is not defined
+
+  - name: Set backup_ocp to default
+    set_fact:
+      backup_ocp=false
+    when: backup_ocp is not defined
+
+  - name: Set pull_docker_images to default
+    set_fact:
+      pull_docker_images=false
+    when: pull_docker_images is not defined
+
+  - name: Set ocp_version to default, if not passed in
+    set_fact:
+      ocp_version: "{{ openshift_release.split('v')[1]}}"
+    when: ocp_version is not defined
+
+  - name: Set yum_repo_ver & yum_base_repo_ver from ocp_version
+    set_fact:
+      yum_repo_ver: "{{ocp_version.split('.') | join('')}}"
+      yum_base_repo_ver: "{{ocp_version.split('.') | join('')}}"
+  
+  - name: Print prep_local_yum_repo vars
+    debug: msg="In prep_local_yum_repo block, openshift_release=={{openshift_release}}==  ocp_version=={{ocp_version}}==  yum_repo_ver=={{yum_repo_ver}}==  yum_base_repo_ver=={{yum_base_repo_ver}}=="
+
+
+  ######################################################################################################################################
+  # 
+  #  Set 'prep_local_yum_repo' boolean to prepare the host(s) to use the local repo, only
+  #
+  - when: prep_local_yum_repo | bool
+    block:
+    - name: Create local yum repo for OCP 3.9
+      blockinfile:
+        dest: /etc/yum.repos.d/rh_ocp.repo
+        create: yes
+        block: |
+          [ocp-rhel-7-server-rpms]
+          name=rhel-7-server-rpms
+          baseurl=http://{{ local_yum_server_fqdn }}/repos/ocp39_new/rhel-7-server-rpms
+          enabled=1
+          gpgcheck=0
+          [ocp-rhel-7-server-extras-rpms]
+          name=rhel-7-server-extras-rpms
+          baseurl=http://{{ local_yum_server_fqdn }}/repos/ocp39_new/rhel-7-server-extras-rpms
+          enabled=1
+          gpgcheck=0
+          [ocp-rhel-7-fast-datapath-rpms]
+          name=rhel-7-fast-datapath-rpms
+          baseurl=http://{{ local_yum_server_fqdn }}/repos/ocp39_new/rhel-7-fast-datapath-rpms
+          enabled=1
+          gpgcheck=0
+          [ocp-rhel-7-server-ose-3.9-rpms]
+          name=rhel-7-server-ose-3.9-rpms
+          baseurl=http://{{ local_yum_server_fqdn }}/repos/ocp39_new/rhel-7-server-ose-3.9-rpms
+          enabled=1
+          gpgcheck=0
+          [ocp-rhel-7-server-ose-3.8-rpms]
+          name=rhel-7-server-ose-3.8-rpms
+          baseurl=http://{{ local_yum_server_fqdn }}/repos/ocp39_new/rhel-7-server-ose-3.8-rpms
+          enabled=1
+          gpgcheck=0
+      when: ocp_version == '3.9'
+  
+    - name: Create local yum repo for OCP 3.10
+      blockinfile:
+        dest: /etc/yum.repos.d/rh_ocp.repo
+        create: yes
+        block: |
+          [ocp-rhel-7-server-rpms]
+          name=rhel-7-server-rpms
+          baseurl=http://{{ local_yum_server_fqdn }}/repos/ocp310/rhel-7-server-rpms
+          enabled=1
+          gpgcheck=0
+          [ocp-rhel-7-server-extras-rpms]
+          name=rhel-7-server-extras-rpms
+          baseurl=http://{{ local_yum_server_fqdn }}/repos/ocp310/rhel-7-server-extras-rpms
+          enabled=1
+          gpgcheck=0
+          [ocp-rhel-7-server-ose-3.10-rpms]
+          name=rhel-7-server-ose-3.10-rpms
+          baseurl=http://{{ local_yum_server_fqdn }}/repos/ocp310/rhel-7-server-ose-3.10-rpms
+          enabled=1
+          gpgcheck=0
+      when: ocp_version == '3.10'
+  
+    - name: Create local yum repo for OCP 3.11
+      blockinfile:
+        dest: /etc/yum.repos.d/rh_ocp.repo
+        create: yes
+        block: |
+          [ocp-rhel-7-server-rpms]
+          name=rhel-7-server-rpms
+          baseurl=http://{{ local_yum_server_fqdn }}/repos/ocp310/rhel-7-server-rpms
+          enabled=1
+          gpgcheck=0
+          [ocp-rhel-7-server-extras-rpms]
+          name=rhel-7-server-extras-rpms
+          baseurl=http://{{ local_yum_server_fqdn }}/repos/ocp310/rhel-7-server-extras-rpms
+          enabled=1
+          gpgcheck=0
+          [ocp-rhel-7-server-ose-3.11-rpms]
+          name=rhel-7-server-ose-3.11-rpms
+          baseurl=http://{{ local_yum_server_fqdn }}/repos/ocp311/rhel-7-server-ose-3.11-rpms
+          enabled=1
+          gpgcheck=0
+      when: ocp_version == '3.11'
+  
+    - name: Disable all yum repos
+      shell:
+        yum-config-manager --disable "*"
+  
+    - name: Enable local yum repos for OCP 3.9
+      shell:
+        yum-config-manager --enable 'ocp-rhel-7-server-rpms' 'ocp-rhel-7-server-extras-rpms' 'ocp-rhel-7-fast-datapath-rpms' 'ocp-rhel-7-server-ose-3.8-rpms'  'ocp-rhel-7-server-ose-3.9-rpms'
+      when: ocp_version == '3.9'
+
+    - name: Enable local yum repos for OCP > 3.9
+      shell:
+        yum-config-manager --enable 'ocp-rhel-7-server-rpms' 'ocp-rhel-7-server-extras-rpms' 'ocp-rhel-7-server-ose-{{ocp_version}}-rpms'
+      when: ocp_version == '3.10' or ocp_version == '3.11'
+
+    - name: Remove all yum cached data
+      command:
+        yum clean all
+  
+    - name:  Remove all yum orphaned data from disabled or removed repos
+      file:
+        dest: /var/cache/yum
+        state: absent
+  
+    - name: Refresh yum repo list
+      command:
+        yum repolist
+  # 
+  ##############################################     End 'prep_local_yum_repo' block     ###############################################
+  ######################################################################################################################################
+  
+
+  ######################################################################################################################################
+  # 
+  #  Set 'restore_yum_repo' boolean to restore (re-enable) yum repos  
+  #  
+  - when: restore_yum_repo | bool
+    block:
+    - name: Print restore_yum_repo vars
+      debug: msg="In restore_yum_repo block, restore_yum_repo=={{ restore_yum_repo }}=="
+
+    - name: Enable all configured yum repos
+      shell:
+        yum-config-manager --enable '*'
+  #
+  ################################################     End 'restore_yum_repo' block     ################################################
+  ######################################################################################################################################
+
+
+  ######################################################################################################################################
+  # 
+  #  Set 'backup_ocp' boolean to backup certain files on the host(s), depending on 'node_type', including etcd backup on 'masters'
+  # 
+  - when: backup_ocp | bool
+    block:
+    - name: Create /root/ocp_<ver>_bck backup directory
+      file:
+        path: "/root/ocp_{{yum_repo_ver}}_bck/pre_bck"
+        state: directory
+        owner: root
+        group: root
+        mode: 0755
+        seuser: unconfined_u
+        serole: object_r
+        setype: admin_home_t
+        selevel: s0
+
+    - name: Create bck_files list
+      set_fact:
+        bck_files:
+        - /etc/sysconfig/atomic-openshift-node
+        - /etc/sysconfig/docker
+        - /etc/sysconfig/docker-network
+        - /etc/sysconfig/docker-storage
+        - /etc/sysconfig/docker-storage-setup
+        - /etc/origin/node/node-config.yaml
+
+    - name: Backup bck_files
+      command:
+        cp {{bck_file}} /root/ocp_{{yum_repo_ver}}_bck/pre_bck/
+      with_items: "{{bck_files}}"
+      loop_control:
+        loop_var: bck_file
+ 
+    # Backup additional items on master nodes 
+    - when: node_type=='MAS'
+      block:
+        # Use 'date' command, for now, as ansible_date_time is static for subsequent runs
+        #etcd_bck_dir="/root/ocp_{{yum_repo_ver}}_bck/pre_bck/etcd-backup-pre-upgrade-{{ansible_date_time.year}}{{ansible_date_time.month}}{{ansible_date_time.day}}_{{ansible_date_time.hour}}{{ansible_date_time.minute}}{{ansible_date_time.second}}"
+      - name: Set etcd_bck_dir variable
+        set_fact:
+          etcd_bck_dir="/root/ocp_{{yum_repo_ver}}_bck/pre_bck/etcd-backup-pre-upgrade-{{lookup('pipe', 'date +%Y%m%d_%H%M%S')}}"
+
+      - name: Print etcd_bck_dir variable
+        debug: msg="etcd_bck_dir=={{etcd_bck_dir}}==  but ansible_date_time shows /root/ocp_{{yum_repo_ver}}_bck/pre_bck/etcd-backup-pre-upgrade-{{ansible_date_time.year}}{{ansible_date_time.month}}{{ansible_date_time.day}}_{{ansible_date_time.hour}}{{ansible_date_time.minute}}{{ansible_date_time.second}}"
+
+
+      - name: Backup etcd db
+        shell:
+          etcdctl backup --data-dir /var/lib/etcd/ --backup-dir {{etcd_bck_dir}}
+
+      - name: Archive .key, .crt & .yaml files in /etc/origin/master
+        archive:
+          path:
+          - /etc/origin/master/*key
+          - /etc/origin/master/*crt
+          - /etc/origin/master/*yaml
+          dest: "/root/ocp_{{yum_repo_ver}}_bck/pre_bck/certs-and-keys-{{ansible_hostname}}.tgz"
+     
+      - name: Create mas_bck_files list, for ocp < 3.10
+        set_fact:
+          mas_bck_files:
+          - /etc/origin/master/master-config.yaml
+          - /etc/sysconfig/atomic-openshift-master
+          - /etc/sysconfig/atomic-openshift-master-api
+          - /etc/sysconfig/atomic-openshift-master-controllers
+          - /usr/lib/systemd/system/etcd.service
+          - /etc/etcd/etcd.conf
+          - /var/lib/etcd/member/snap/db
+        when: ocp_version == '3.9'
+
+      - name: Create mas_bck_files list, for ocp > 3.9
+        set_fact:
+          mas_bck_files:
+          - /etc/origin/master/master-config.yaml
+          - /usr/lib/systemd/system/etcd.service
+          - /etc/etcd/etcd.conf
+          - /var/lib/etcd/member/snap/db
+        when: ocp_version == '3.10' or ocp_version == '3.11'
+
+      - name: Backup mas_bck_files
+        command:
+          cp {{mas_bck_file}} /root/ocp_{{yum_repo_ver}}_bck/pre_bck/
+        with_items: "{{mas_bck_files}}"
+        loop_control:
+          loop_var: mas_bck_file
+  #
+  # 
+  ###################################################     End 'backup_ocp' block     ###################################################
+  ######################################################################################################################################
+
+ 
+  ######################################################################################################################################
+  # 
+  #  Set 'pull_docker_images' boolean to pull a set of docker images on the host(s), as defined per 'node_type'
+  # 
+  - when: pull_docker_images | bool
+    block:
+    - name: Set docker_images list to Master set
+      set_fact:
+        docker_images={{ docker_images_mas }}
+      when: node_type=='MAS'
+
+    - name: Set docker_images list to Infra set
+      set_fact:
+        docker_images={{ docker_images_inf }}
+      when: node_type=='INF'
+
+    - name: Set docker_images list to Application/Compute set
+      set_fact:
+        docker_images={{ docker_images_app }}
+      when: node_type=='APP'
+
+    - name: Pull docker container base images
+      shell:
+        docker pull registry.access.redhat.com/openshift3/{{ docker_image }}:{{ openshift_image_tag }}
+      with_items: "{{ docker_images}}"
+      loop_control:
+        loop_var: docker_image
+  #
+  # 
+  ###############################################     End 'pull_docker_images' block     ###############################################
+  ######################################################################################################################################

@@ -1,0 +1,48 @@
+  - name: Set number of etcd backups to keep
+    set_fact:
+      num_etcd_bck_dir_keep=4
+
+  - name: Set etcd backup dir
+    set_fact:
+      etcd_bck_parent_dir=/var/lib/etcd
+
+  - name: Set old_etcd_dirs index limit to 0
+    set_fact:
+      old_etcd_dirs_index_end=0
+
+  - name: Grab all backup dir's
+    find:
+      path: "{{ etcd_bck_parent_dir }}"
+      file_type: directory
+      patterns: "openshift-backup-p*"
+    register: files
+
+  - name: Build list of etcd backup dir's
+    set_fact:
+      old_etcd_dirs="{{ old_etcd_dirs|default([]) }} + [ '{{ etcd_old_bck_dir }}' ]"
+    with_items: "{{ files.files | sort(attribute='ctime') | map(attribute='path') | list }}"
+    loop_control:
+      loop_var: etcd_old_bck_dir
+
+  - name: Reset old_etcd_dirs index limit, when number of dirs > num_etcd_bck_dir_keep
+    set_fact:
+      old_etcd_dirs_index_end={{files.files|length-num_etcd_bck_dir_keep|int-1}}
+    when: files.files|length|int > num_etcd_bck_dir_keep|int
+
+  - when: files.files|length > num_etcd_bck_dir_keep|int
+    block:
+    - name: print dirs to remove
+      debug: msg="About to remove {{ old_etcd_dirs[ old_etcd_dirs_index | int]}}"
+      with_sequence: start=0 end={{old_etcd_dirs_index_end|int}}
+      loop_control:
+        loop_var: old_etcd_dirs_index
+
+
+    - name: Remove old dirs
+      file:
+        path: "{{ old_etcd_dirs[ old_etcd_dirs_index | int]}}"
+        state: absent
+      with_sequence: start=0 end={{old_etcd_dirs_index_end|int}}
+      loop_control:
+        loop_var: old_etcd_dirs_index
+

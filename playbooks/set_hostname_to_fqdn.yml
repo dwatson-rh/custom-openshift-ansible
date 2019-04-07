@@ -1,0 +1,9 @@
+  - name: Set hostname to ansbile inventory name
+    shell:
+      /bin/hostnamectl set-hostname "{{ inventory_hostname }}"
+    when: ansible_nodename != inventory_hostname
+  - name: Run dracut
+    shell:
+      /sbin/dracut -f
+    when: ansible_nodename != inventory_hostname
+
